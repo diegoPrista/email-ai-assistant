@@ -2,84 +2,150 @@
 
 ## Overview
 
-An AI assistant that automates email workflows — reading, drafting, and routing emails via Microsoft Graph API. Built for Diego Prista (DMC Production-NL) to integrate with his Outlook/Microsoft 365 account.
+A local-first email productivity tool that runs a lightweight AI model to analyze your mailbox, surface action items, draft responses, and maintain a growing to-do list — all without requiring corporate IT approval or sending data to the cloud.
 
-## Goals
+**User number one:** Diego Prista. The tool is built for personal productivity first, with potential to market as a standalone product.
 
-- Read emails from Outlook inbox (Microsoft Graph API)
-- Draft replies and new emails based on context/instructions
-- Route emails to appropriate folders or flag for follow-up
-- Surface actionable email summaries on demand
+## Core Problem
+
+- Corporate email overload with no good local AI tool
+- Microsoft Graph API requires IT department consent and Azure app registration — a barrier for personal use
+- Cloud AI tools send email data to third parties — undesirable for work email
+- Existing AI email tools are API-first, cloud-first, or both
+
+## Solution
+
+A self-contained local tool that:
+1. Connects via **IMAP** (works with any email provider, no special permissions needed)
+2. Runs a **lightweight local AI model** (M1 Macbook Air friendly)
+3. Performs **email actions** locally: read, sort, archive, flag, draft
+4. Generates a **report + to-do list** after each scan
+5. User reviews and approves everything — AI never acts unsupervised
+
+## Design Principles
+
+- **Offline-first**: Model runs entirely on local hardware
+- **Privacy-preserving**: No email data leaves the machine
+- **No IT dependencies**: Standard IMAP credentials are enough
+- **Lightweight**: Usable on M1 Macbook Air while running browser and other apps
+- **User-controlled**: AI suggests, human approves — no automatic sends or actions
 
 ## Architecture
 
-- **Runtime**: Python (local Macbook Air, OpenCode)
-- **Email API**: Microsoft Graph API (delegated flow, OAuth2)
-- **AI**: Claude via Anthropic API (or local model)
-- **Sync**: GitHub repo (`diegoPrista/email-ai-assistant`) for version control and collaboration
+- **Runtime**: Python 3 (macOS first, cross-platform to Windows/Linux later)
+- **Email**: IMAP (any provider — Outlook, Gmail, corporate Exchange)
+- **AI**: Ollama with a lightweight model (Phi-3 mini, Llama 3.2 1B, or similar)
+- **Model loading**: Load on scan start, release when done — frees RAM for other apps
+- **Sync**: GitHub repo for version control
 
 ## Authentication
 
-- Azure AD app registration (client ID: `1506ba02-1f49-4b2e-8fc3-ff090df98603`)
-- Delegated flow — user signs in interactively once
-- Required permissions: `Mail.Read`, `Mail.ReadWrite`
-- Token storage: local file (OAuth refresh token)
+- IMAP credentials: email address + app password (no OAuth, no Azure, no IT consent needed)
+- For Outlook/Microsoft 365: App password via microsoft.com/account
+- Token storage: local encrypted file or OS keychain
+
+## Model Loading Pattern
+
+```
+User triggers scan (manual or scheduled)
+    → Load model into RAM (M1 unified memory)
+    → Scan and analyze emails
+    → Generate report + to-do list
+    → Release model (RAM freed)
+    → User reviews output
+```
+
+Model size target: ≤3B parameters. Must not saturate M1 Macbook Air's 8-16GB unified memory.
 
 ## Scope — Phase 1 (MVP)
 
-1. List recent emails from inbox (last 20, unread first)
-2. Read full email body (plain text + HTML)
-3. Draft a reply given email content + instruction
-4. Mark email as read/unread, move to folder
+### Email Actions
+- [ ] List recent emails (last 50, unread first) via IMAP
+- [ ] Read full email body (plain text + HTML)
+- [ ] Move email to folder (archive, sort, etc.)
+- [ ] Mark as read/unread
+- [ ] Flag for follow-up
+
+### AI Capabilities
+- [ ] Analyze email content and suggest: archive / respond / forward / flag
+- [ ] Draft a reply (not sent — returned to user for review)
+- [ ] Extract action items from email thread
+- [ ] Generate scan report with:
+      - Emails processed
+      - Actions taken (by AI, pending user approval)
+      - Emails needing response
+      - Action points extracted
+      - Updated to-do list
+
+### To-Do List
+- [ ] Persistent to-do list stored locally (JSON file)
+- [ ] AI populates it from email scan
+- [ ] User marks items done (interactive TUI or simple file edit)
+- [ ] To-do list persists across sessions
 
 ## Out of Scope (Phase 1)
 
-- Sending email (Phase 2)
-- Email search/filter beyond recent inbox
+- Sending emails (draft only, no Send)
+- Email search beyond recent inbox
 - Calendar integration
-- Attachment handling
+- Attachment handling (beyond listing)
+- Multi-device sync
+- Cloud deployment
 
 ## Tech Stack
 
 - Python 3.11+
-- `msal` — Microsoft Authentication Library
-- `anthropic` — Claude API client
-- `readchar` — terminal keyboard input (interactive mode)
-- `httpx` — HTTP client for Graph API
-
-## Workflow
-
-1. User runs script on Mac Mini: `python email_assist.py`
-2. Script lists recent unread emails
-3. User selects email by number
-4. User gives instruction (e.g. "draft a reply thanking them")
-5. Script calls Claude → returns draft
-6. User approves/edits → script marks email read/sends
+- `imapclient` — IMAP client
+- `beautifulsoup4` — HTML email parsing
+- `ollama` — Local model inference (Python SDK)
+- `readchar` — Terminal keyboard input
+- `rich` — Terminal UI (tables, progress bars)
+- ` Ollama` runtime installed separately
 
 ## File Structure
 
 ```
 email-ai-assistant/
-├── SPEC.md              # This file
-├── README.md            # Project overview
-├── email_assist.py       # Main entry point
-├── auth/
-│   └── token_manager.py  # OAuth token lifecycle
-├── graph/
-│   └── client.py        # Microsoft Graph API wrapper
+├── SPEC.md
+├── README.md
+├── email_assist.py          # Main entry point
+├── imap_client.py            # IMAP connection and operations
+├── model_client.py           # Ollama local model wrapper
+├── report_generator.py      # Scan report + to-do list generation
+├── todo_list.py              # Persistent to-do list manager
 ├── prompts/
-│   └── draft_reply.md   # Claude prompt template
+│   └── analyze_email.md      # System prompt for email analysis
 └── requirements.txt
 ```
 
+## Model Requirements
+
+| Criteria | Target |
+|---|---|
+| Parameters | ≤3B |
+| RAM usage | <4GB (M1 unified memory) |
+| Context window | ≥8K tokens (email threads can be long) |
+| Speed | ≤10 tokens/sec on M1 |
+| Alternatives | Phi-3 mini, Llama 3.2 1B, Qwen2 1.5B, Mistral 1B |
+
+Model is loaded during scan only — user retains full system usability for other work.
+
 ## Open Questions
 
-- [ ] IT approval: Azure app admin consent for Mail.Read/Mail.ReadWrite
-- [ ] Claude API key — use existing or create new?
-- [ ] Interactive CLI vs API server mode?
+- [ ] Preferred local model (Phi-3 vs Llama 3.2 1B vs other)?
+- [ ] IMAP credentials setup — does Diego already have an app password for Outlook?
+- [ ] Interactive TUI vs simple CLI prompts for the to-do list?
+- [ ] Scheduled scan — cron job on Macbook or manual trigger?
+- [ ] Ollama installed via `brew install ollama` or manual download?
+
+## Cross-Platform Path
+
+- Phase 1: macOS (M1 Macbook Air)
+- Phase 2: Windows (native Python + Ollama Windows)
+- Phase 3: Self-hosted (Linux + any IMAP)
 
 ## References
 
-- Microsoft Graph: https://developer.microsoft.com/en-us/graph
-- Azure app registration: https://portal.azure.com → App registrations
-- Email skill: `/data/skills/productivity/email/SKILL.md`
+- Ollama: https://ollama.ai
+- IMAPclient: https://imapclient.readthedocs.io
+- M1 model benchmarks: ~10 tokens/sec for 3B models
