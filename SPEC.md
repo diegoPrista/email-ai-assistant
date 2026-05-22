@@ -13,7 +13,7 @@ An AI assistant that automates email workflows — reading, drafting, and routin
 
 ## Architecture
 
-- **Runtime**: Python (local Mac Mini, OpenCode)
+- **Runtime**: Python (local Macbook Air, OpenCode)
 - **Email API**: Microsoft Graph API (delegated flow, OAuth2)
 - **AI**: Claude via Anthropic API (or local model)
 - **Sync**: GitHub repo (`diegoPrista/email-ai-assistant`) for version control and collaboration
